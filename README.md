@@ -90,30 +90,4 @@ Forecasting performance is assessed using the following metrics:
 
 Confidence intervals for the evaluation metrics are obtained through bootstrapping techniques.
 
----
 
-## Outputs
-
-The project generates the following output files:
-
-### SARIMA–GRU
-- `unemployment_forecast_metrics_SARIMA_GRU.xlsx`  
-- `unemployment_forecast_SARIMA_GRU.xlsx`
-
-### SARIMA–LSTM
-- `unemployment_forecast_metrics_SARIMA_LSTM.xlsx`  
-- `unemployment_forecast_SARIMA_LSTM.xlsx`
-
-These files contain performance metrics and multi-step forecasts for each gender and age group.
-
----
-
-## Usage
-
-The scripts are designed to be executed sequentially:
-1. Data preprocessing and exploratory analysis.
-2. Classical model estimation.
-3. Neural network training.
-4. Hybrid model forecasting and evaluation.
-
----
