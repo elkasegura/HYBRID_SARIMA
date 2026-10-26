@@ -1,6 +1,6 @@
 # HYBRID SARIMA–DEEP LEARNING MODELS TO FORECAST THE ITALIAN UNEMPLOYMENT RATE
 
-**Date:** 10-01-2026  
+**Date:** 26-10-2026  
 **Country:** Italy  
 **Data Frequency:** Quarterly  
 **Disaggregation:** Gender and age groups  
