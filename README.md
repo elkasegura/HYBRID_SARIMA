@@ -8,21 +8,6 @@
 
 This repository contains a methodological framework for the analysis and forecasting of the unemployment rate in Italy using classical time series models and deep learning approaches, including hybrid models.
 
----
-
-## Authors and Affiliations
-
-**Elka Segura Sánchez**<sup>1</sup>,  
-**Carlo Adornetto**<sup>2</sup>,  
-**Pier Francesco Perri**<sup>3</sup>  
-
-<sup>1,3</sup> Department of Economics, Statistics and Finance *“Giovanni Anania”*  
-<sup>2</sup> Department of Mathematics and Computer Science  
-
-University of Calabria, Arcavacata di Rende (CS), Italy  
-
----
-
 ## Project Description
 
 The aim of this project is to forecast the Italian unemployment rate by combining linear and nonlinear modeling techniques. Classical econometric models are used to capture trend and seasonal components, while recurrent neural networks are employed to model nonlinear dynamics. Hybrid approaches integrate both methodologies to improve forecasting accuracy.
