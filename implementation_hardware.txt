@@ -1,24 +1,28 @@
 IMPLEMENTATION AND HARDWARE
 ========================================
-Generated: 2026-11-06T11:38:46+01:00
-Operating system: Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
+Generated: 2026-11-06T11:48:12+01:00
+Operating system: Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39
 Architecture: x86_64
 CPU: x86_64
-CPU cores (physical/logical): 6 / 12
-RAM (total / currently available): 7.58 GB / 1.65 GB
+CPU cores (physical/logical): 4 / 8
+RAM (total / currently available): 122.84 GB / 118.97 GB
 Python: 3.12.3
-PyTorch: 2.9.1
-NumPy: 2.4.0
-Pandas: 2.3.3
-Scikit-learn: 1.8.0
-Statsmodels: 0.14.6
+PyTorch: 2.15.0
+NumPy: 2.5.4
+Pandas: 3.1.0
+Scikit-learn: 1.9.1
+Statsmodels: 0.15.0
 CUDA available: True
-CUDA version reported by PyTorch: 12.8
-cuDNN version: 91002
+CUDA version reported by PyTorch: 13.2
+cuDNN version: 92600
 LSTM code execution device (cuda if available, else cpu): CUDA GPU
-GPU 0: NVIDIA GeForce RTX 5050 Laptop GPU (7.96 GB)
+GPU 0: NVIDIA RTX A4500 (19.99 GB)
 
 IMPLEMENTATION DETAILS FROM YOUR SHARED CODE
 Python; PyTorch (LSTM); Adam optimizer; MinMaxScaler (scikit-learn).
 Grid search for hyperparameters; chronological train/validation/test split.
+One-step-ahead validation and test with observed previous values.
+These are details of the code discussed; verify that your current notebook uses them.
 
+PAPER DRAFT (complete with values above)
+The models were implemented in Python [version]. LSTM models were developed using PyTorch [version], with NumPy [version], pandas [version], and scikit-learn [version] for data processing and evaluation. Experiments were executed on [CPU model] with [RAM] RAM, using [GPU, if applicable] and [OS].
