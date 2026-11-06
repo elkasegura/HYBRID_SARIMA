@@ -1,0 +1,24 @@
+IMPLEMENTATION AND HARDWARE
+========================================
+Generated: 2026-11-06T11:38:46+01:00
+Operating system: Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
+Architecture: x86_64
+CPU: x86_64
+CPU cores (physical/logical): 6 / 12
+RAM (total / currently available): 7.58 GB / 1.65 GB
+Python: 3.12.3
+PyTorch: 2.9.1
+NumPy: 2.4.0
+Pandas: 2.3.3
+Scikit-learn: 1.8.0
+Statsmodels: 0.14.6
+CUDA available: True
+CUDA version reported by PyTorch: 12.8
+cuDNN version: 91002
+LSTM code execution device (cuda if available, else cpu): CUDA GPU
+GPU 0: NVIDIA GeForce RTX 5050 Laptop GPU (7.96 GB)
+
+IMPLEMENTATION DETAILS FROM YOUR SHARED CODE
+Python; PyTorch (LSTM); Adam optimizer; MinMaxScaler (scikit-learn).
+Grid search for hyperparameters; chronological train/validation/test split.
+
