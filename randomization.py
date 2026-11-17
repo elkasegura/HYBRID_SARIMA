@@ -10,6 +10,8 @@ from torch import nn
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 warnings.filterwarnings('ignore')
 BASE = Path(__file__).resolve().parent  # Guardar randomization.py junto a data.csv
@@ -20,7 +22,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 if DEVICE.type == 'cpu':
     torch.set_num_threads(1)
-SEEDS = [42, 43, 45, 46, 47, 48, 49, 50, 51, 52]
+SEEDS = [42, 137, 256, 389, 512, 673, 784, 891, 1024, 2026]
 SERIES = ['15-34 M', '15-34 F', '35-49 M', '35-49 F', '50-74 M', '50-74 F', 'Global_Rate']
 SARIMA = [
     ((0,1,0),(0,1,1,4)), ((0,1,0),(0,1,1,4)),
@@ -176,6 +178,87 @@ def main():
     (OUT/'total_time.txt').write_text(f'{elapsed:.2f} segundos = {elapsed/60:.2f} minutos\n')
     print(f'\nTiempo total: {elapsed/60:.2f} minutos')
     print(f'Resultados guardados en: {OUT}')
+
+    #Guardar en la imagen en pdf con formato latex
+    
+        # Academic style
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.3)
+
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["DejaVu Serif"],
+        "mathtext.fontset": "cm",
+        "axes.labelsize": 20,
+        "xtick.labelsize": 18,
+        "ytick.labelsize": 18,
+        "pdf.fonttype": 42,
+        "savefig.bbox": "tight"
+    })
+
+    df = result.copy()
+    df = df.rename(columns={"Serie": "Series"})
+
+    models = ["LSTM", "GRU", "SARIMA-LSTM_seq", "SARIMA-GRU_seq"]
+    series = ["15-34 M", "15-34 F", "35-49 M", "35-49 F",
+            "50-74 M", "50-74 F", "Global Rate"]
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    sns.barplot(
+        data=df,
+        y="RMSE",
+        x="Model",
+        hue="Series",
+        order=models,
+        hue_order=series,
+        estimator=np.mean,
+        errorbar="sd",
+        capsize=0.12,
+        palette="Set2",
+        ax=ax
+    )
+
+    ax.set_ylabel("RMSE (mean ± sd)")
+    ax.set_xlabel(" ")
+    ax.set_ylim(bottom=0)
+    ax.grid(axis="y", linestyle=":", alpha=0.5)
+    ax.grid(axis="x", visible=False)
+    ax.set_axisbelow(True)
+
+    # Leyenda centrada arriba de la figura
+    handles, labels = ax.get_legend_handles_labels()
+    ax.get_legend().remove()
+
+    fig.legend(
+        handles, labels,
+        title=None,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=4,
+        frameon=False,
+        columnspacing=2.5,
+        handletextpad=0.6,
+        fontsize=18
+    )
+
+    sns.despine(ax=ax)
+
+    # Reservar espacio arriba para la leyenda
+    fig.subplots_adjust(
+        top=0.90,
+        bottom=0.13,
+        left=0.09,
+        right=0.97
+    )
+
+    plt.savefig(
+        OUT / "rmse_robustness.pdf",
+        dpi=300,
+        bbox_inches="tight"
+    )
+    
+    plt.close()
+
 
 if __name__ == '__main__':
     main()
