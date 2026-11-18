@@ -198,9 +198,31 @@ def main():
     df = result.copy()
     df = df.rename(columns={"Serie": "Series"})
 
-    models = ["LSTM", "GRU", "SARIMA-LSTM_seq", "SARIMA-GRU_seq"]
-    series = ["15-34 M", "15-34 F", "35-49 M", "35-49 F",
-            "50-74 M", "50-74 F", "Global Rate"]
+    model_names = {
+        "SARIMA": "SARIMA",
+        "LSTM": "LSTM",
+        "GRU": "GRU",
+        "SARIMA-LSTM_seq": r"SL$_{\mathrm{seq}}$",
+        "SARIMA-GRU_seq": r"SG$_{\mathrm{seq}}$"
+    }
+
+    # Aplicar los nombres abreviados al DataFrame
+    df["Model"] = df["Model"].replace(model_names)
+
+    # Orden de los modelos en la gráfica
+    models = [
+        "LSTM",
+        "GRU",
+        r"SL$_{\mathrm{seq}}$",
+        r"SG$_{\mathrm{seq}}$"
+    ]
+
+    series = [
+        "15-34 M", "15-34 F",
+        "35-49 M", "35-49 F",
+        "50-74 M", "50-74 F",
+        "Global_Rate"
+    ]
 
     fig, ax = plt.subplots(figsize=(14, 7))
 
