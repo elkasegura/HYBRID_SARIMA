@@ -1,28 +1,38 @@
-"""Diebold-Mariano: imprime en pantalla dos tablas (MSE y MAPE).
+"""DM / DM-HLN con statsmodels, para las 7 series de HYBRID_SARIMA.
 
-Colocar en la raíz de HYBRID_SARIMA y ejecutar:
-    python dm_tabla_articulo_pantalla.py
+Instalación:
+    python -m pip install -U "statsmodels>=0.15.1" pandas numpy
 
-Los valores p son exploratorios: las 14 predicciones provienen de un
-único origen y cubren horizontes distintos (1 a 14 pasos).
+Ejecución desde cualquier directorio:
+    python /ruta/HYBRID_SARIMA/dm_statsmodels_pantalla.py
+
+Muestra dos tablas (MSE y MAPE) solamente en la terminal.
+No escribe CSV, PDF ni otros archivos.
+
+Nota: en este proyecto las 14 predicciones son horizontes 1..14 desde
+un único origen. HORIZON=1 es una referencia para la corrección HLN;
+los valores p no constituyen automáticamente una inferencia formal
+sobre pronósticos de horizonte fijo.
 """
+
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
+from statsmodels.tsa.stattools import diebold_mariano_test
+
+HAC_LAGS = 1           # 0, 1, 2, ... Rezagos en la varianza HAC
+HORIZON = 1           # h utilizado en la corrección HLN
+HARVEY_ADJ = False      # True: DM-HLN; False: DM original
 
 BASE = Path(__file__).resolve().parent
 RESULTS = BASE / "results"
 
-SERIES = [
+SERIES = (
     "15-34 M", "15-34 F", "35-49 M", "35-49 F",
-    "50-74 M", "50-74 F", "Global_Rate"
-]
-METRICS = ("MSE", "MAPE")
+    "50-74 M", "50-74 F", "Global_Rate",
+)
 MODELS = ("SARIMA", "LSTM", "GRU", "SARIMA-LSTM_seq", "SARIMA-GRU_seq")
-
-# Selección indicada por el usuario (sin cambiarla automáticamente).
 BEST_MODELS = {
     "15-34 M": "SARIMA",
     "15-34 F": "SARIMA",
@@ -33,87 +43,64 @@ BEST_MODELS = {
     "Global_Rate": "SARIMA",
 }
 
-WIDE_FILES = {
+PREDICTIONS_WIDE = {
     "SARIMA": RESULTS / "SARIMA" / "sarima_predictions.csv",
     "LSTM": RESULTS / "LSTM" / "lstm_predictions.csv",
     "GRU": RESULTS / "GRU" / "gru_predictions.csv",
 }
-HYBRID_FOLDERS = {
+PREDICTIONS_HYBRID = {
     "SARIMA-LSTM_seq": RESULTS / "SARIMA_LSTM_Sequential",
     "SARIMA-GRU_seq": RESULTS / "SARIMA_GRU_Sequential",
 }
 
-# Estimación de largo plazo con rezagos 2, como el cálculo previo.
-HAC_LAGS = 2
 
-
-def predictions():
-    """Carga valores reales y pronósticos alineados para cada serie."""
+def load_data():
+    """Obtiene valores reales y pronósticos alineados (14 por serie)."""
     data = pd.read_csv(BASE / "data.csv")
     data["Period"] = data["Period"].astype(str).str.strip()
     data = data.tail(14).copy()
     periods = data["Period"].tolist()
     if len(periods) != 14 or len(set(periods)) != 14:
-        raise ValueError("Se necesitan exactamente 14 períodos únicos de prueba")
+        raise ValueError("data.csv debe contener 14 períodos de prueba distintos")
 
     wide = {}
-    for name, path in WIDE_FILES.items():
-        frame = pd.read_csv(path, index_col=0)
+    for model, file in PREDICTIONS_WIDE.items():
+        frame = pd.read_csv(file, index_col=0)
         frame.index = frame.index.astype(str).str.strip()
-        wide[name] = frame[[str(i) for i in range(14)]]
+        wide[model] = frame.loc[:, [str(i) for i in range(14)]]
 
     for serie in SERIES:
-        real = data[serie].to_numpy(dtype=float)
-        pred = {name: frame.loc[serie].to_numpy(dtype=float)
-                for name, frame in wide.items()}
+        actual = data[serie].to_numpy(dtype=float)
+        forecasts = {
+            model: frame.loc[serie].to_numpy(dtype=float)
+            for model, frame in wide.items()
+        }
 
-        for name, folder in HYBRID_FOLDERS.items():
-            path = folder / f"pred_{serie.replace(' ', '_')}.csv"
-            frame = pd.read_csv(path)
+        for model, folder in PREDICTIONS_HYBRID.items():
+            file = folder / f"pred_{serie.replace(' ', '_')}.csv"
+            frame = pd.read_csv(file)
             frame["Period"] = frame["Period"].astype(str).str.strip()
+            if frame["Period"].duplicated().any():
+                raise ValueError(f"Períodos duplicados: {file}")
             frame = frame.set_index("Period").loc[periods]
-            if not np.allclose(frame["Observed"].to_numpy(dtype=float), real,
-                               rtol=1e-5, atol=1e-5):
-                raise ValueError(f"Valores reales distintos en {path}")
-            pred[name] = frame["Hybrid"].to_numpy(dtype=float)
+            observed = frame["Observed"].to_numpy(dtype=float)
+            if not np.allclose(observed, actual, rtol=1e-5, atol=1e-5):
+                raise ValueError(f"Valores reales no coinciden: {file}")
+            forecasts[model] = frame["Hybrid"].to_numpy(dtype=float)
 
-        yield serie, real, pred
+        if not np.isfinite(actual).all() or any(
+            not np.isfinite(p).all() for p in forecasts.values()
+        ):
+            raise ValueError(f"Hay datos NaN/inf para {serie}")
 
-
-def loss(real, estimate, metric):
-    errors = real - estimate
-    if metric == "MSE":
-        return errors ** 2
-    if metric == "MAPE":
-        if np.any(np.isclose(real, 0.0)):
-            raise ValueError("MAPE indefinido si existen valores reales iguales a cero")
-        return 100 * np.abs(errors / real)
-    raise ValueError(metric)
+        yield serie, actual, forecasts
 
 
-def dm_statistic(loss_1, loss_2):
-    """DM tipo HAC-Bartlett, p bilateral normal, uso SOLO exploratorio.
-
-    Signo como en Table 7 del artículo:
-    negativo -> favorece al Model 1; positivo -> favorece al Model 2.
-    """
-    d = np.asarray(loss_1 - loss_2, dtype=float)
-    n = len(d)
-    u = d - d.mean()
-    long_run_var = np.dot(u, u) / n
-    for lag in range(1, min(HAC_LAGS, n - 1) + 1):
-        autocov = np.dot(u[lag:], u[:-lag]) / n
-        long_run_var += 2 * (1 - lag / (HAC_LAGS + 1)) * autocov
-    if long_run_var <= 1e-14 or not np.isfinite(long_run_var):
-        return float("nan"), float("nan")
-    dm = np.sqrt(n) * d.mean() / np.sqrt(long_run_var)
-    p = 2 * norm.sf(abs(dm))
-    return float(dm), float(p)
+def p_label(p):
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
 
 
 def significance(p):
-    if not np.isfinite(p):
-        return "--"
     if p < 0.001:
         return "***"
     if p < 0.01:
@@ -123,44 +110,52 @@ def significance(p):
     return "ns"
 
 
-def p_label(p):
-    if not np.isfinite(p):
-        return "--"
-    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
-
-
-def make_table():
-    rows = []
-    for serie, real, forecast in predictions():
-        best = BEST_MODELS[serie]
-        for metric in METRICS:
-            first = loss(real, forecast[best], metric)
-            for other in MODELS:
-                if other == best:
-                    continue
-                dm, p = dm_statistic(first, loss(real, forecast[other], metric))
-                rows.append({
-                    "Serie": serie.replace("_", " "),
-                    "Metric": metric,
-                    "Model 1": best,
-                    "Model 2": other,
-                    "DM statistic": round(dm, 3),
-                    "p value": p_label(p),
-                    "Significance": significance(p),
-                })
-    return pd.DataFrame(rows)
-
-
 def main():
-    tabla = make_table()
-    columnas = ["Serie", "Model 1", "Model 2", "DM statistic", "p value", "Significance"]
-    for metrica in METRICS:
-        vista = tabla.loc[tabla["Metric"] == metrica, columnas].copy()
-        vista["DM statistic"] = vista["DM statistic"].map(lambda x: f"{x:.3f}")
-        print(f"\nDiebold-Mariano (DM) — {metrica}")
-        print(vista.to_string(index=False))
-        print("Note: *** p < 0.001; ** p < 0.01; * p < 0.05; ns = not significant.")
-        print("Negative DM favors Model 1; positive DM favors Model 2.")
+    rows = {"MSE": [], "MAPE": []}
+
+    for serie, actual, forecasts in load_data():
+        model_1 = BEST_MODELS[serie]
+        for metric in ("MSE", "MAPE"):
+            for model_2 in MODELS:
+                if model_2 == model_1:
+                    continue
+
+                # Todo el cálculo DM, HAC y HLN lo hace statsmodels.
+                try:
+                    res = diebold_mariano_test(
+                        actual,
+                        forecasts[model_1],
+                        forecasts[model_2],
+                        criterion=metric.lower(),
+                        lags=HAC_LAGS,
+                        horizon=HORIZON,
+                        harvey_adj=HARVEY_ADJ
+                        
+                    )
+                    stat, p = float(res.statistic), float(res.pvalue)
+                    stat_label = f"{stat:.3f}"
+                    p_text = p_label(p)
+                    sig = significance(p)
+                except ValueError as exc:
+                    stat_label, p_text, sig = "--", "--", "--"
+                    print(f"Aviso ({serie}, {model_1} vs {model_2}, {metric}): {exc}")
+
+                rows[metric].append((
+                    serie.replace("_", " "), model_1, model_2,
+                    stat_label, p_text, sig,
+                ))
+
+    label = "DM-HLN" if HARVEY_ADJ else "DM"
+    columns = ["Serie", "Model 1", "Model 2", label, "p value", "Significance"]
+    for metric in ("MSE", "MAPE"):
+        print(f"\nDIEBOLD-MARIANO {'***' if HARVEY_ADJ else '(original)'} — {metric}")
+        print(pd.DataFrame(rows[metric], columns=columns).to_string(index=False))
+        print("*** p < 0.001; ** p < 0.01; * p < 0.05; ns = not significant")
+        print("Estadístico negativo: favorece Model 1; positivo: favorece Model 2")
+
+    print(f"\nConfiguración: HAC_LAGS={HAC_LAGS}; HORIZON={HORIZON}; HARVEY_ADJ={HARVEY_ADJ}")
+    if HARVEY_ADJ:
+        print("Nota: h=1 se usa como referencia HLN; las predicciones reales abarcan h=1..14.")
 
 
 if __name__ == "__main__":
