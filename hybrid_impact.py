@@ -57,7 +57,10 @@ def main():
 
         for name, hybrid in hybrids.items():
             prediction = hybrid.loc[SERIES, metric].to_numpy(dtype=float)
-            values[name] = 100 * (reference - prediction) / reference
+            #values[name] = 100 * (reference - prediction) / reference
+            values[name] = 100 * (prediction - reference) / reference
+            
+
 
         all_values = np.concatenate(list(values.values()))
         left = min(-10, all_values.min() - max(11, 0.16 * abs(all_values.min())))
