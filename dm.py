@@ -36,8 +36,8 @@ MODELS = ("SARIMA", "LSTM", "GRU", "SARIMA-LSTM_seq", "SARIMA-GRU_seq")
 BEST_MODELS = {
     "15-34 M": "SARIMA",
     "15-34 F": "SARIMA",
-    "35-49 M": "SARIMA-GRU_seq",
-    "35-49 F": "SARIMA-GRU_seq",
+    "35-49 M": "SARIMA-LSTM_seq",
+    "35-49 F": "SARIMA-LSTM_seq",
     "50-74 M": "SARIMA",
     "50-74 F": "LSTM",
     "Global_Rate": "SARIMA",
@@ -157,6 +157,86 @@ def main():
     if HARVEY_ADJ:
         print("Nota: h=1 se usa como referencia HLN; las predicciones reales abarcan h=1..14.")
 
+ # Heatmap — MSE
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from matplotlib.colors import TwoSlopeNorm
+
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.3)
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["DejaVu Serif"],
+        "mathtext.fontset": "cm",
+        "axes.labelsize": 20,
+        "xtick.labelsize": 20,
+        "ytick.labelsize": 20,
+        "pdf.fonttype": 42,
+        "savefig.bbox": "tight"
+    })
+
+    df = pd.DataFrame(rows["MSE"], columns=columns)
+    df[label] = pd.to_numeric(df[label], errors="coerce")
+    idx = [s.replace("_", " ") for s in SERIES]
+    dm = df.pivot(index="Serie", columns="Model 2", values=label).reindex(index=idx, columns=MODELS)
+    sig = df.pivot(index="Serie", columns="Model 2", values="Significance").reindex_like(dm)
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    cmap = plt.get_cmap("RdBu_r")
+    limit = max(1, np.nanmax(np.abs(dm.values))) if dm.notna().any().any() else 1
+    norm = TwoSlopeNorm(vmin=-limit, vcenter=0, vmax=limit)
+
+    for i in range(len(dm)):
+        for j in range(len(MODELS)):
+            v, s = dm.iloc[i, j], sig.iloc[i, j]
+            color = "white" if pd.isna(v) else "#E8E8E8" if s == "ns" else cmap(norm(v))
+            text = "—" if pd.isna(v) else f"{v:.3f}{'' if s == 'ns' else s}"
+
+            ax.add_patch(plt.Rectangle((j, i), 1, 1, facecolor=color, edgecolor="white", lw=2))
+            ax.text(
+                j + 0.5, i + 0.5, text,
+                ha="center", va="center", fontsize=15,
+                color="white" if pd.notna(v) and s != "ns" and abs(v) > 0.65 * limit else "black"
+            )
+
+    # Espacio extra a la izquierda para las dos columnas
+    ax.set_xlim(-1.8, len(MODELS))
+    ax.set_ylim(len(dm), -0.9)
+
+    # Encabezados de columnas del heatmap
+    ax.set_xticks(np.arange(len(MODELS)) + 0.5)
+    ax.set_xticklabels([m.replace("_seq", "") for m in MODELS], fontsize=15)
+    ax.xaxis.tick_top()
+
+    # Quitar eje Y normal
+    names = {
+        "SARIMA-LSTM_seq": r"SL$_{seq}$",
+        "SARIMA-GRU_seq": r"SG$_{seq}$"
+    }
+
+    ax.set_xlim(-1.8, len(MODELS))
+    ax.set_ylim(len(dm), -0.6)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # Series and reference models
+    for i, serie in enumerate(SERIES):
+        ref = BEST_MODELS[serie]
+        ax.text(-1.75, i+.5, serie.replace("_", " "), ha="left", va="center", fontsize=15)
+        ax.text(-0.6, i+.5, names.get(ref, ref), ha="center", va="center", fontsize=15)
+
+    # Column headers
+    ax.text(-1.75, -.3, "Series", ha="left", va="center", fontsize=15, fontweight="bold")
+    ax.text(-0.6, -.3, "Best model", ha="center", va="center", fontsize=15, fontweight="bold")
+
+    for j, model in enumerate(MODELS):
+        ax.text(j+.5, -.3, names.get(model, model), ha="center", va="center",
+                fontsize=15, fontweight="bold")
+
+    ax.grid(False)
+    sns.despine(ax=ax, left=True, bottom=True)
+    plt.tight_layout()
+    plt.savefig(BASE / "IMG" / "DM_heatmap_MSE.pdf", format="pdf", bbox_inches="tight")
+    
 
 if __name__ == "__main__":
     main()
