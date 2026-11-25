@@ -28,9 +28,9 @@ SERIES = ["15-34 M", "15-34 F", "35-49 M", "35-49 F",
 METRICS = ["MAE", "MSE", "RMSE", "MAPE"]
 MODELS = {
     "SARIMA-LSTM_seq": ("SARIMA_LSTM_Sequential/sarima_lstm_test.csv",
-                        r"SL$_{\mathrm{seq}}$", "#2B5F8A"),
+                        r"SL$_{seq}$", "#2B5F8A"),
     "SARIMA-GRU_seq": ("SARIMA_GRU_Sequential/sarima_gru_test.csv",
-                       r"SG$_{\mathrm{seq}}$", "#D48B23"),
+                       r"SG$_{seq}$", "#D48B23"),
 }
 
 

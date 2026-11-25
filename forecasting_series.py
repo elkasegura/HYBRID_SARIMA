@@ -23,8 +23,8 @@ MODEL_PATHS = {
     "SARIMA": ("SARIMA/sarima_predictions.csv", None),
     "LSTM": ("LSTM/lstm_predictions.csv", None),
     "GRU": ("GRU/gru_predictions.csv", None),
-    "SARIMA-LSTM$_{seq}$": ("SARIMA_LSTM_Sequential", "Hybrid"),
-    "SARIMA-GRU$_{seq}$": ("SARIMA_GRU_Sequential", "Hybrid"),
+    "SARIMA-LSTM_seq": ("SARIMA_LSTM_Sequential", "Hybrid"),
+    "SARIMA-GRU_seq": ("SARIMA_GRU_Sequential", "Hybrid"),
 }
 
 # Original plot blue, used for the observed series.
@@ -33,8 +33,8 @@ COLORS = {
     "SARIMA": "#D48B23",
     "LSTM": "#238B59",
     "GRU": "#C24B5A",
-    "SARIMA-LSTM$_{seq}$": "#7453A6",
-    "SARIMA-GRU$_{seq}$": "#169AA6",
+    "SARIMA-LSTM_seq": "#7453A6",
+    "SARIMA-GRU_seq": "#169AA6",
 }
 
 # Abbreviated model names
@@ -42,8 +42,8 @@ model_names = {
     "SARIMA": "SARIMA",
     "LSTM": "LSTM",
     "GRU": "GRU",
-    "SARIMA-LSTM_seq": r"SL$_{\mathrm{seq}}$",
-    "SARIMA-GRU_seq": r"SG$_{\mathrm{seq}}$"
+    "SARIMA-LSTM_seq": r"SL$_{seq}$",
+    "SARIMA-GRU_seq": r"SG$_{seq}$"
 }
 
 # Mapping from model keys to their abbreviated display names for plots.
@@ -115,7 +115,7 @@ def draw_forecast(ax, series, historical, periods, predictions, *, context=False
 
     for model, values in predictions[series].items():
         ax.plot(test_x, values, color=COLORS[model], linestyle="--",
-                linewidth=1.45, alpha=0.91, label=model, zorder=3)
+                linewidth=1.45, alpha=0.91, label=model_names.get(model, model), zorder=3)
 
     ax.set_title(series.replace("_", " "), fontsize=14, pad=6)
     ax.set_xlabel("")
@@ -138,7 +138,7 @@ def legend_handles():
     return [Line2D([0], [0], color=color, lw=2.1 if name == "Observed" else 1.6,
                    linestyle="-" if name == "Observed" else "--",
                    marker="o" if name == "Observed" else None,
-                   markersize=3.5, label=name)
+                   markersize=3.5, label=model_names.get(name, name))
             for name, color in COLORS.items()]
 
 

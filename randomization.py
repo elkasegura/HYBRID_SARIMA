@@ -218,8 +218,8 @@ def main():
         "SARIMA": "SARIMA",
         "LSTM": "LSTM",
         "GRU": "GRU",
-        "SARIMA-LSTM_seq": r"SL$_{\mathrm{seq}}$",
-        "SARIMA-GRU_seq": r"SG$_{\mathrm{seq}}$"
+        "SARIMA-LSTM_seq": r"SL$_{seq}$",
+        "SARIMA-GRU_seq": r"SG$_{seq}$"
     }
 
     # Aplicar los nombres abreviados al DataFrame
@@ -229,8 +229,8 @@ def main():
     models = [
         "LSTM",
         "GRU",
-        r"SL$_{\mathrm{seq}}$",
-        r"SG$_{\mathrm{seq}}$"
+        r"SL$_{seq}$",
+        r"SG$_{seq}$"
     ]
 
     series = [

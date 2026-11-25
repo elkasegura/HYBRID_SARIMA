@@ -1,1 +1,1 @@
-81.49 segundos = 1.36 minutos
+85.63 segundos = 1.43 minutos
