@@ -1,4 +1,4 @@
-"""Robustez con 10 semillas; reproduce las implementaciones vanilla y secuencial."""
+"""Robustez con 10 semillas: vanilla multi-output y híbridos con residuos recursivos, origen fijo."""
 from pathlib import Path
 from time import perf_counter
 import random
@@ -31,47 +31,37 @@ SARIMA = [
     ((0,1,0),(0,1,1,4))
 ]
 # Cada tupla: (neurons, lr, window, epochs, batch_size, dropout)
-CONFIG = {
-    'LSTM': [
-        ((128,128),.01,4,3,32,.1),
-        ((128,128),.01,4,3,32,0.),
-        ((64,32),.01,4,5,32,.1),
-        ((128,64),.01,4,13,32,0.),
-        ((64,64),.01,4,4,32,.1),
-        ((128,),.01,4,99,16,0.),
-        ((128,128),.01,4,3,32,0.)
-    ],
-    'GRU': [
-        ((128,64),.01,4,2,16,.3),
-        ((128,128),.01,4,2,32,.1),
-        ((128,),.01,4,3,32,0.),
-        ((128,128),.01,4,7,32,.1),
-        ((128,128),.01,4,6,16,.3),
-        ((128,32),.001,6,13,32,0.),
-        ((128,64),.01,4,2,16,.1)
-    ],
-    'SARIMA-LSTM_seq': [
-        ((32,),.01,4,4,16,0.),
-        ((128,64),.001,4,4,16,0.),
-        ((128,64),.01,4,64,16,.1),
-        ((128,32),.001,4,4,16,.3),
-        ((64,),.01,8,46,16,0.),
-        ((64,64),.01,8,54,32,.1),
-        ((128,64),.01,4,5,16,.3)
-    ],
-    'SARIMA-GRU_seq': [
-        ((128,),.01,4,3,32,0.),
-        ((128,64),.01,8,97,16,.3),
-        ((128,64),.01,4,88,16,0.),
-        ((128,),.001,4,5,32,.3),
-        ((32,),.01,8,21,16,0.),
-        ((128,128),.01,8,59,32,.3),
-        ((128,128),.01,8,52,16,.1)
-    ]
-}
+CONFIG = {'LSTM': [((128, 128), 0.01, 4, 3, 32, 0.1),
+          ((128, 128), 0.01, 4, 3, 32, 0.0),
+          ((64, 32), 0.01, 4, 5, 32, 0.1),
+          ((128, 64), 0.01, 4, 13, 32, 0.0),
+          ((64, 64), 0.01, 4, 4, 32, 0.1),
+          ((128,), 0.01, 4, 99, 16, 0.0),
+          ((128, 128), 0.01, 4, 3, 32, 0.0)],
+ 'GRU': [((128, 64), 0.01, 4, 2, 16, 0.3),
+         ((128, 128), 0.01, 4, 2, 32, 0.1),
+         ((128,), 0.01, 4, 3, 32, 0.0),
+         ((128, 128), 0.01, 4, 7, 32, 0.1),
+         ((128, 128), 0.01, 4, 6, 16, 0.3),
+         ((128, 32), 0.001, 6, 13, 32, 0.0),
+         ((128, 64), 0.01, 4, 2, 16, 0.1)],
+ 'SARIMA-LSTM_seq': [((32,), 0.001, 8, 9, 16, 0.1),
+                     ((32, 32), 0.01, 4, 76, 16, 0.0),
+                     ((64,), 0.01, 4, 96, 16, 0.0),
+                     ((32,), 0.001, 8, 8, 16, 0.1),
+                     ((128, 128), 0.01, 8, 53, 32, 0.3),
+                     ((128, 32), 0.001, 4, 10, 32, 0.3),
+                     ((128, 32), 0.01, 8, 96, 32, 0.1)],
+ 'SARIMA-GRU_seq': [((32,), 0.001, 8, 7, 16, 0.0),
+                    ((128, 32), 0.01, 8, 89, 16, 0.0),
+                    ((128, 128), 0.01, 6, 84, 16, 0.0),
+                    ((128,), 0.001, 8, 2, 16, 0.3),
+                    ((128, 32), 0.01, 8, 99, 32, 0.1),
+                    ((64, 32), 0.001, 4, 15, 16, 0.1),
+                    ((128, 64), 0.01, 8, 59, 32, 0.0)]}
 
 class Recurrent(nn.Module):
-    def __init__(self, kind, neurons, dropout, vanilla=False):
+    def __init__(self, kind, neurons, dropout, vanilla=False, horizon=1):
         super().__init__()
         unit = nn.LSTM if kind == 'LSTM' else nn.GRU
         self.layers = nn.ModuleList()
@@ -81,7 +71,7 @@ class Recurrent(nn.Module):
             size = n
         self.drop = nn.Dropout(dropout)
         self.vanilla = vanilla
-        self.fc = nn.Linear(size, 1)
+        self.fc = nn.Linear(size, horizon)
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
@@ -91,27 +81,27 @@ class Recurrent(nn.Module):
         x = self.drop(x[:, -1, :]) if self.vanilla and len(self.layers) == 1 else x[:, -1, :]
         return self.fc(x)
 
-def predict(kind, params, historical, actual_test, seed, sarima_test=None):
+def predict(kind, params, historical, steps, seed, vanilla, direct_horizon=14):
     neurons, lr, window, epochs, batch, dropout = params
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    vanilla = sarima_test is None
     # Vanilla: mismos tipos float32 usados en los notebooks originales.
     historical = np.asarray(historical, dtype=np.float32 if vanilla else float)
-    actual_test = np.asarray(actual_test, dtype=np.float32 if vanilla else float)
     scaler = MinMaxScaler().fit(historical.reshape(-1, 1))
     scaled = scaler.transform(historical.reshape(-1, 1)).ravel()
-    X = np.stack([scaled[i-window:i] for i in range(window, len(scaled))])
+    H = direct_horizon if vanilla else 1
+    X = np.array([scaled[i-window:i] for i in range(window, len(scaled)-H+1)], dtype=np.float32)
+    y = np.array([scaled[i:i+H] for i in range(window, len(scaled)-H+1)], dtype=np.float32)
     X = torch.as_tensor(X[:, :, None], dtype=torch.float32, device=DEVICE)
-    y = torch.as_tensor(scaled[window:, None], dtype=torch.float32, device=DEVICE)
+    y = torch.as_tensor(y, dtype=torch.float32, device=DEVICE)
     # DataLoader sin shuffle en vanilla; randperm en los híbridos.
     if vanilla:
         from torch.utils.data import DataLoader, TensorDataset
         loader = DataLoader(TensorDataset(X.cpu(), y.cpu()), batch_size=batch, shuffle=False)
-    model = Recurrent(kind, neurons, dropout, vanilla=vanilla).to(DEVICE)
+    model = Recurrent(kind, neurons, dropout, vanilla=vanilla, horizon=H).to(DEVICE)
     optim = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss()
     for _ in range(epochs):  # Épocas fijas elegidas con validation
@@ -124,29 +114,24 @@ def predict(kind, params, historical, actual_test, seed, sarima_test=None):
             loss.backward()
             optim.step()
 
-    # Test vanilla: predicción vectorizada con ventanas del notebook original.
-    if vanilla:
-        test_scaled = scaler.transform(actual_test.reshape(-1, 1)).ravel()
-        data_test = np.concatenate([scaled, test_scaled])
-        Xt = np.array([data_test[i-window:i] for i in range(len(scaled), len(data_test))], dtype=np.float32)
-        model.eval()
-        with torch.no_grad():
-            out = model(torch.as_tensor(Xt[:, :, None], device=DEVICE)).cpu().numpy()
-        return scaler.inverse_transform(out).ravel()
-
-    history = list(historical)
-    pred = []
     model.eval()
+    if vanilla:
+        # Original notebook: direct multi-output prediction, no feedback.
+        x = torch.tensor(scaled[-window:].reshape(1,window,1), dtype=torch.float32, device=DEVICE)
+        with torch.no_grad():
+            pred = model(x).cpu().numpy()
+        return scaler.inverse_transform(pred.reshape(-1,1)).ravel()[:steps]
+    # Original sequential notebooks: recurse in unscaled residual space.
+    history = list(historical)
+    predictions = []
     with torch.no_grad():
-        for i, observed in enumerate(actual_test):
-            x = scaler.transform(np.array(history[-window:]).reshape(-1, 1))
-            x = torch.as_tensor(x.reshape(1, window, 1), dtype=torch.float32, device=DEVICE)
-            value = scaler.inverse_transform(model(x).cpu().numpy())[0, 0]
-            pred.append(value)
-            # Rolling one-step: SOLO se agrega el observado después de predecir.
-            history.append(observed - sarima_test[i] if sarima_test is not None else observed)
-    pred = np.array(pred)
-    return pred + sarima_test if sarima_test is not None else pred
+        for _ in range(steps):
+            x = scaler.transform(np.array(history[-window:]).reshape(-1,1))
+            x = torch.tensor(x.reshape(1,window,1), dtype=torch.float32, device=DEVICE)
+            pred = scaler.inverse_transform(model(x).cpu().numpy())[0,0]
+            predictions.append(pred)
+            history.append(float(pred))
+    return np.asarray(predictions)
 
 def metrics(real, pred, insample):
     mae = mean_absolute_error(real, pred)
@@ -162,6 +147,7 @@ def main():
     df = pd.read_csv(BASE / 'data.csv', index_col='Period', parse_dates=True).sort_index()
     split = int(len(df)*.85)  # 70 % train + 15 % validation; 15 % test
     rows = []
+    prediction_rows = []
     for j, serie in enumerate(SERIES):
         y_trainval = df[serie].iloc[:split].to_numpy(dtype=float)
         y_test = df[serie].iloc[split:].to_numpy(dtype=float)
@@ -179,11 +165,16 @@ def main():
             for seed in SEEDS:
                 t = perf_counter()
                 preds = predict(kind, configurations[j], residuals if hybrid else y_trainval,
-                                y_test, seed, sarima_test if hybrid else None)
+                                len(y_test), seed, vanilla=not hybrid, direct_horizon=len(y_test))
+                if hybrid:
+                    preds = sarima_test + preds
+                for h, (actual, forecast) in enumerate(zip(y_test, preds), 1):
+                    prediction_rows.append(dict(Serie=serie, Model=name, Seed=seed, Horizon=h, Actual=actual, Prediction=forecast, Error=actual-forecast))
                 rows.append(dict(Serie=serie, Model=name, Seed=seed,
                                  **metrics(y_test if hybrid else y_test.astype(np.float32), preds, y_trainval),
                                  Time_s=round(perf_counter()-t, 3)))
             print(f'  {name}: 10 semillas en {perf_counter()-t_group:.1f} s', flush=True)
+    pd.DataFrame(prediction_rows).to_csv(OUT/'predictions_10_seeds.csv', index=False)
     result = pd.DataFrame(rows)
     result.to_csv(OUT/'runs_10_seeds.csv', index=False)
     fields = ['MAE', 'MSE', 'RMSE', 'MAPE', 'MASE', 'R2', 'Time_s']
@@ -191,7 +182,7 @@ def main():
     summary.columns = ['_'.join(c) for c in summary.columns]
     summary.reset_index().to_csv(OUT/'summary_mean_std.csv', index=False)
     elapsed = perf_counter()-t0
-    (OUT/'total_time.txt').write_text(f'{elapsed:.2f} segundos = {elapsed/60:.2f} minutos\n')
+    #(OUT/'total_time.txt').write_text(f'{elapsed:.2f} segundos = {elapsed/60:.2f} minutos\n')
     print(f'\nTiempo total: {elapsed/60:.2f} minutos')
     print(f'Resultados guardados en: {OUT}')
 
